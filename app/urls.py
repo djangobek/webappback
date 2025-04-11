@@ -1,0 +1,19 @@
+from django.urls import path,include
+from rest_framework.routers import DefaultRouter
+from .views import *
+router = DefaultRouter()
+router.register('botuser',BotUserViewset)
+router.register('channels',TelegramChannelViewset)
+urlpatterns = [
+    path('',include(router.urls)),
+    path('user/',GetUser.as_view()),
+    path('lang/',ChangeUserLanguage.as_view()),
+    path('channel/',GetTelegramChannel.as_view()),
+    path('delete_channel/',DeleteTelegramChannel.as_view()),
+    path('tasks/', TaskListCreateView.as_view(), name='task-list-create'),
+    path('tasks/<int:task_id>/', TaskDetailView.as_view(), name='task-detail'),
+    path('tasks/<int:task_id>/status/', TaskStatusUpdateView.as_view(), name='task-status-update'),
+    path('rankings/', UserRankView.as_view(), name='user-rankings'),
+
+    
+]
