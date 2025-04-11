@@ -13,6 +13,9 @@ from django.http import JsonResponse
 class BotUserViewset(ModelViewSet):
     queryset = BotUserModel.objects.all()
     serializer_class = BotUserSerializer
+
+
+
 class GetUser(APIView):
     def post(self,request):
         data = request.data
@@ -75,16 +78,30 @@ class GetTelegramChannel(APIView):
 
 class MeView(APIView):
     def get(self, request):
-        telegram_id = request.session.get('telegram_id')
+        # Get Telegram ID from headers
+        telegram_id = request.headers.get('X-Telegram-ID')
+        
         if not telegram_id:
-            return Response({'error': 'Not authenticated'}, status=401)
-
+            return Response(
+                {'error': 'Telegram ID required in X-Telegram-ID header'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
         try:
             user = BotUserModel.objects.get(telegram_id=telegram_id)
             serializer = BotUserSerializer(user)
             return Response(serializer.data)
+            
         except BotUserModel.DoesNotExist:
-            return Response({'error': 'User not found'}, status=404)
+            return Response(
+                {'error': 'User not found. Please register first.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
 
 
@@ -197,3 +214,4 @@ class UserRankView(APIView):
         response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
 
         return response
+    
