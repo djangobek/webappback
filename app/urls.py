@@ -14,7 +14,7 @@ urlpatterns = [
     path('tasks/<int:task_id>/', TaskDetailView.as_view(), name='task-detail'),
     path('tasks/<int:task_id>/status/', TaskStatusUpdateView.as_view(), name='task-status-update'),
     path('rankings/', UserRankView.as_view(), name='user-rankings'),
-    path('profile/', get_user_profile_info.as_view(), name='user-profile'),
+    path('profile/', get_user_profile_info, name='user-profile'),
     path('check-user/', check_user_by_telegram_id, name='check-user'),
     path('create-user/', create_bot_user, name='create-bot-user'),
     path('select-tasks/', select_tasks),
