@@ -554,3 +554,34 @@ def get_task_logs_by_user(request):
     }
 
     return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_user_profile_info(request):
+    telegram_id = request.query_params.get('telegram_id')
+    if not telegram_id:
+        return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Calculate rank by ordering all users by points
+    all_users = BotUserModel.objects.order_by('-points')
+    user_rank = list(all_users.values_list('telegram_id', flat=True)).index(telegram_id) + 1
+
+    # Calculate challenge participation days
+    if user.challenge_start_date:
+        today = timezone.now().date()
+        participate_days = (today - user.challenge_start_date).days + 1
+    else:
+        participate_days = 0
+
+    return Response({
+        'name': user.name,
+        'telegram_id': user.telegram_id,
+        'points': user.points,
+        'rank': user_rank,
+        'participate_days': participate_days,
+    })
