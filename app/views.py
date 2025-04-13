@@ -11,7 +11,7 @@ from rest_framework import generics
 from django.http import JsonResponse
 from datetime import timedelta
 from rest_framework.decorators import api_view
-
+from rest_framework import status as http_status
 
 class BotUserViewset(ModelViewSet):
     queryset = BotUserModel.objects.all()
@@ -329,33 +329,33 @@ def user_day_info(request):
 def complete_task(request):
     telegram_id = request.data.get('telegram_id')
     task_id = request.data.get('task_id')
+    status_choice = request.data.get('status')  # 'done' or 'missed'
 
-    if not telegram_id or not task_id:
-        return Response({'error': 'telegram_id and task_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not telegram_id or not task_id or status_choice not in ['done', 'missed']:
+        return Response({
+            'error': 'telegram_id, task_id and valid status (done/missed) are required'
+        }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
         user = BotUserModel.objects.get(telegram_id=telegram_id)
     except BotUserModel.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'User not found'}, status=http_status.HTTP_404_NOT_FOUND)
 
     try:
         task = ChallengeTask.objects.get(id=task_id)
     except ChallengeTask.DoesNotExist:
-        return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'Task not found'}, status=http_status.HTTP_404_NOT_FOUND)
 
     # Check if user selected this task
     if not UserTaskSelection.objects.filter(user=user, task=task).exists():
-        return Response({'error': 'Task not part of user selection'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Task not part of user selection'}, status=http_status.HTTP_400_BAD_REQUEST)
 
     # Check if already logged today
     today = timezone.now().date()
     if DailyTaskLog.objects.filter(user=user, task=task, date=today).exists():
-        return Response({'error': 'Already logged today'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Already logged today'}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    now = timezone.localtime().time()
-    status_choice = "done" if task.time_start <= now <= task.time_end else "missed"
-
-    # Create log
+    # Create log with given status
     DailyTaskLog.objects.create(user=user, task=task, date=today, status=status_choice)
 
     # Add points if done
@@ -363,7 +363,7 @@ def complete_task(request):
         user.points += task.point
         user.save()
 
-    return Response({'status': status_choice, 'message': 'Task logged successfully'}, status=status.HTTP_200_OK)
+    return Response({'status': status_choice, 'message': 'Task logged successfully'}, status=http_status.HTTP_200_OK)
 
 def refresh_user_ranks():
     users = BotUserModel.objects.all().order_by('-points', 'added')
@@ -399,18 +399,27 @@ def get_user_selected_tasks(request):
     except BotUserModel.DoesNotExist:
         return Response({'error': 'User not found'}, status=404)
 
+    today = timezone.now().date()
     selected_tasks = user.selected_tasks.select_related('task').all()
-    data = [
-        {
+
+    data = []
+    for sel in selected_tasks:
+        # Check if this task has a log for today
+        log = DailyTaskLog.objects.filter(user=user, task=sel.task, date=today).first()
+        if log:
+            status_value = log.status
+        else:
+            status_value = "unchanged"
+
+        data.append({
             'id': sel.task.id,
             'title': sel.task.title,
             'description': sel.task.description,
             'time_start': sel.task.time_start,
             'time_end': sel.task.time_end,
             'point': sel.task.point,
-        }
-        for sel in selected_tasks
-    ]
+            'status': status_value
+        })
 
     return Response({'tasks': data})
 
