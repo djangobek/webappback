@@ -527,3 +527,30 @@ def get_today_tasks_status(request):
         "date": today,
         "tasks": tasks_with_status
     })
+
+@api_view(['GET'])
+def get_task_logs_by_user(request):
+    telegram_id = request.query_params.get('telegram_id')
+    task_id = request.query_params.get('task_id')
+
+    if not telegram_id or not task_id:
+        return Response({'error': 'telegram_id and task_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        task = ChallengeTask.objects.get(id=task_id)
+    except ChallengeTask.DoesNotExist:
+        return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    logs = DailyTaskLog.objects.filter(user=user, task=task).order_by('date')
+
+    data = {
+        str(log.date): log.status
+        for log in logs
+    }
+
+    return Response(data, status=status.HTTP_200_OK)
