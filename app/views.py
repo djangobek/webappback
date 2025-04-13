@@ -243,7 +243,6 @@ def check_user_by_telegram_id(request):
         return Response({'exists': False}, status=status.HTTP_200_OK)
 
 
-
 @api_view(['POST'])
 def create_bot_user(request):
     serializer = BotUserCreateSerializer(data=request.data)

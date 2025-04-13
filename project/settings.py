@@ -34,9 +34,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://ertalabki-baraka.vercel.app"
 ]
 
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://\w+-\d+-\d+-\d+-\d+\.vercel\.app$",  # Regex for Ngrok URL
-]
+# CORS_ALLOWED_ORIGIN_REGEXES = [
+#     r"^https://\w+-\d+-\d+-\d+-\d+\.vercel\.app$",  # Regex for Ngrok URL
+# ]
 
 CORS_ALLOW_HEADERS = (
     "accept",
@@ -62,13 +62,14 @@ CSRF_TRUSTED_ORIGINS = [
     "https://ertalabki-baraka.vercel.app",
 ]
 
-CORS_ORIGIN_WHITELIST = [
- # If testing locally too
-    "http://ertalabki-baraka.vercel.app",
-    "https://ertalabki-baraka.vercel.app",
-]
+# CORS_ORIGIN_WHITELIST = [
+#  # If testing locally too
+#     "http://ertalabki-baraka.vercel.app",
+#     "https://ertalabki-baraka.vercel.app",
+# ]
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 INSTALLED_APPS = [
     'jazzmin',
     "corsheaders",
