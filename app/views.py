@@ -569,7 +569,7 @@ def get_user_profile_info(request):
 
     # Calculate rank by ordering all users by points
     all_users = BotUserModel.objects.order_by('-points')
-    user_rank = list(all_users.values_list('telegram_id', flat=True)).index(telegram_id) + 1
+    user_rank = list(map(str, BotUserModel.objects.order_by('-points').values_list('telegram_id', flat=True))).index(str(telegram_id)) + 1
 
     # Calculate challenge participation days
     if user.challenge_start_date:
