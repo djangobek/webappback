@@ -567,9 +567,16 @@ def get_user_profile_info(request):
     except BotUserModel.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # Calculate rank by ordering all users by points
-    all_users = BotUserModel.objects.order_by('-points')
-    user_rank = list(map(str, BotUserModel.objects.order_by('-points').values_list('telegram_id', flat=True))).index(str(telegram_id)) + 1
+    # Get ranked list of all users' telegram IDs as strings
+    all_telegram_ids = list(
+        BotUserModel.objects.order_by('-points').values_list('telegram_id', flat=True)
+    )
+    all_telegram_ids_str = [str(tid) for tid in all_telegram_ids]
+
+    try:
+        user_rank = all_telegram_ids_str.index(str(telegram_id)) + 1
+    except ValueError:
+        user_rank = None  # fallback in case telegram_id is somehow not in list
 
     # Calculate challenge participation days
     if user.challenge_start_date:
