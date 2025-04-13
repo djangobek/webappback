@@ -15,6 +15,15 @@ urlpatterns = [
     path('tasks/<int:task_id>/status/', TaskStatusUpdateView.as_view(), name='task-status-update'),
     path('rankings/', UserRankView.as_view(), name='user-rankings'),
     path('profile/', MeView.as_view(), name='user-profile'),
-
+    path('check-user/', check_user_by_telegram_id, name='check-user'),
+    path('create-user/', create_bot_user, name='create-bot-user'),
+    path('select-tasks/', select_tasks),
+    path('complete-task/', complete_task),
+    path('user-day-info/', user_day_info, name='user-day-info'),
+    path('top-challengers/', top_challengers, name='top-challengers'),
+    path('user-tasks/', get_user_selected_tasks, name='get-user-tasks'),
+    path('all-tasks/', get_all_challenge_tasks, name='get-all-tasks'),
+    path("user-progress/", get_user_challenge_progress, name="user-progress"),
+    path('today-task-status/', get_today_tasks_status, name='today-task-status'),
     
 ]

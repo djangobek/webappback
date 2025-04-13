@@ -9,6 +9,9 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from django.http import JsonResponse
+from datetime import timedelta
+from rest_framework.decorators import api_view
+
 
 class BotUserViewset(ModelViewSet):
     queryset = BotUserModel.objects.all()
@@ -215,3 +218,304 @@ class UserRankView(APIView):
 
         return response
     
+
+
+
+
+##########
+################
+##########
+##########
+##########
+##########
+@api_view(['GET'])
+def check_user_by_telegram_id(request):
+    telegram_id = request.query_params.get('telegram_id')
+
+    if not telegram_id:
+        return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+        serializer = BotUserSerializer(user)
+        return Response({'exists': True, 'user': serializer.data}, status=status.HTTP_200_OK)
+    except BotUserModel.DoesNotExist:
+        return Response({'exists': False}, status=status.HTTP_200_OK)
+
+
+
+@api_view(['POST'])
+def create_bot_user(request):
+    serializer = BotUserCreateSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        telegram_id = serializer.validated_data.get('telegram_id')
+
+        # Check if user already exists
+        if BotUserModel.objects.filter(telegram_id=telegram_id).exists():
+            return Response({'error': 'User with this telegram_id already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer.save()
+        return Response({'message': 'User created successfully', 'user': serializer.data}, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+def select_tasks(request):
+    telegram_id = request.data.get('telegram_id')
+    task_ids = request.data.get('task_ids', [])
+
+    if not telegram_id or not isinstance(task_ids, list):
+        return Response({'error': 'telegram_id and task_ids[] are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(task_ids) != 5:
+        return Response({'error': 'You must select exactly 5 tasks'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Prevent re-selection
+
+    if UserTaskSelection.objects.filter(user=user).exists():
+        return Response({'error': 'Tasks already selected'}, status=status.HTTP_400_BAD_REQUEST)
+
+    tasks = ChallengeTask.objects.filter(id__in=task_ids)
+    if tasks.count() != 5:
+        return Response({'error': 'One or more invalid task IDs'}, status=status.HTTP_400_BAD_REQUEST)
+
+    for task in tasks:
+        UserTaskSelection.objects.create(user=user, task=task)
+    if not user.challenge_start_date:
+        user.challenge_start_date = timezone.now().date()
+        user.save()
+
+    return Response({'message': 'Tasks selected successfully'}, status=status.HTTP_201_CREATED)
+
+
+
+def get_day_number(user):
+    if not user.challenge_start_date:
+        return None  # user hasn't started
+
+    today = timezone.now().date()
+    delta = (today - user.challenge_start_date).days + 1  # +1 to count from Day 1
+
+    if delta > 30:
+        return 30  # cap at 30
+    elif delta < 1:
+        return 1
+    return delta
+
+@api_view(['GET'])
+def user_day_info(request):
+    telegram_id = request.GET.get('telegram_id')
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=404)
+
+    day = get_day_number(user)
+
+    return Response({
+        'day_number': day,
+        'total_points': user.points,
+        'start_date': user.challenge_start_date
+    })
+
+@api_view(['POST'])
+def complete_task(request):
+    telegram_id = request.data.get('telegram_id')
+    task_id = request.data.get('task_id')
+
+    if not telegram_id or not task_id:
+        return Response({'error': 'telegram_id and task_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        task = ChallengeTask.objects.get(id=task_id)
+    except ChallengeTask.DoesNotExist:
+        return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Check if user selected this task
+    if not UserTaskSelection.objects.filter(user=user, task=task).exists():
+        return Response({'error': 'Task not part of user selection'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if already logged today
+    today = timezone.now().date()
+    if DailyTaskLog.objects.filter(user=user, task=task, date=today).exists():
+        return Response({'error': 'Already logged today'}, status=status.HTTP_400_BAD_REQUEST)
+
+    now = timezone.localtime().time()
+    status_choice = "done" if task.time_start <= now <= task.time_end else "missed"
+
+    # Create log
+    DailyTaskLog.objects.create(user=user, task=task, date=today, status=status_choice)
+
+    # Add points if done
+    if status_choice == "done":
+        user.points += task.point
+        user.save()
+
+    return Response({'status': status_choice, 'message': 'Task logged successfully'}, status=status.HTTP_200_OK)
+
+def refresh_user_ranks():
+    users = BotUserModel.objects.all().order_by('-points', 'added')
+    for index, user in enumerate(users, start=1):
+        user.rank = index
+        user.save()
+
+
+@api_view(['GET'])
+def top_challengers(request):
+    top_users = BotUserModel.objects.order_by('-points', 'added')[:10]
+
+    data = [
+        {
+            'name': user.name,
+            'telegram_id': user.telegram_id,
+            'points': user.points,
+            'rank': user.rank,
+        }
+        for user in top_users
+    ]
+    return Response({'top_challengers': data})
+
+
+@api_view(['GET'])
+def get_user_selected_tasks(request):
+    telegram_id = request.query_params.get('telegram_id')
+    if not telegram_id:
+        return Response({'error': 'telegram_id is required'}, status=400)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=404)
+
+    selected_tasks = user.selected_tasks.select_related('task').all()
+    data = [
+        {
+            'id': sel.task.id,
+            'title': sel.task.title,
+            'description': sel.task.description,
+            'time_start': sel.task.time_start,
+            'time_end': sel.task.time_end,
+            'point': sel.task.point,
+        }
+        for sel in selected_tasks
+    ]
+
+    return Response({'tasks': data})
+
+
+
+
+
+@api_view(['GET'])
+def get_all_challenge_tasks(request):
+
+    tasks = ChallengeTask.objects.all()
+    data = [
+        {
+            'id': task.id,
+            'title': task.title,
+            'description': task.description,
+            'time_start': task.time_start,
+            'time_end': task.time_end,
+            'point': task.point,
+        }
+        for task in tasks
+    ]
+    return Response({'available_tasks': data})
+
+
+
+@api_view(['GET'])
+def get_user_challenge_progress(request):
+    telegram_id = request.query_params.get('telegram_id')
+    
+    if not telegram_id:
+        return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not user.challenge_start_date:
+        return Response({'error': 'Challenge not started for this user'}, status=status.HTTP_400_BAD_REQUEST)
+
+    today = timezone.now().date()
+    start_date = user.challenge_start_date
+    total_days = (today - start_date).days + 1  # include today
+
+    selected_tasks = UserTaskSelection.objects.filter(user=user).select_related('task')
+    task_ids = [st.task.id for st in selected_tasks]
+    task_titles = {st.task.id: st.task.title for st in selected_tasks}
+
+    data = {}
+
+    for i in range(total_days):
+        date = start_date + timedelta(days=i)
+        logs = DailyTaskLog.objects.filter(user=user, date=date)
+        log_dict = {log.task_id: log.status for log in logs}
+
+        done = []
+        missed = []
+
+        for task_id in task_ids:
+            status_value = log_dict.get(task_id, 'missed')  # default to 'missed'
+            if status_value == 'done':
+                done.append(task_titles[task_id])
+            else:
+                missed.append(task_titles[task_id])
+
+        overall_status = "done" if len(done) >= len(missed) else "missed"
+
+        data[f"day{i + 1}"] = {
+            "date": date,
+            "status": overall_status,
+            "done": done,
+            "missed": missed
+        }
+
+    return Response(data)
+
+@api_view(['GET'])
+def get_today_tasks_status(request):
+    telegram_id = request.query_params.get('telegram_id')
+
+    if not telegram_id:
+        return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    today = timezone.now().date()
+    selected_tasks = UserTaskSelection.objects.filter(user=user).select_related('task')
+    logs = DailyTaskLog.objects.filter(user=user, date=today)
+    log_dict = {log.task_id: log.status for log in logs}
+
+    tasks_with_status = []
+    for selection in selected_tasks:
+        task = selection.task
+        status_str = log_dict.get(task.id, "missed")  # default to missed if no log
+        tasks_with_status.append({
+            "title": task.title,
+            "status": status_str
+        })
+
+    return Response({
+        "date": today,
+        "tasks": tasks_with_status
+    })

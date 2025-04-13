@@ -34,3 +34,8 @@ class TaskCompletionSerializer(serializers.ModelSerializer):
         model = TaskCompletion
         fields = "__all__"
 
+
+class BotUserCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BotUserModel
+        fields = ['name', 'telegram_id', 'language']
