@@ -25,5 +25,5 @@ urlpatterns = [
     path('all-tasks/', get_all_challenge_tasks, name='get-all-tasks'),
     path("user-progress/", get_user_challenge_progress, name="user-progress"),
     path('today-task-status/', get_today_tasks_status, name='today-task-status'),
-    
+    path('calendar/', get_calendar, name='calendar'),
 ]
