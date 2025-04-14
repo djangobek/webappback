@@ -268,8 +268,6 @@ def select_tasks(request):
     if not telegram_id or not isinstance(task_ids, list):
         return Response({'error': 'telegram_id and task_ids[] are required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if len(task_ids) != 5:
-        return Response({'error': 'You must select exactly 5 tasks'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = BotUserModel.objects.get(telegram_id=telegram_id)
@@ -282,8 +280,6 @@ def select_tasks(request):
         return Response({'error': 'Tasks already selected'}, status=status.HTTP_400_BAD_REQUEST)
 
     tasks = ChallengeTask.objects.filter(id__in=task_ids)
-    if tasks.count() != 5:
-        return Response({'error': 'One or more invalid task IDs'}, status=status.HTTP_400_BAD_REQUEST)
 
     for task in tasks:
         UserTaskSelection.objects.create(user=user, task=task)
