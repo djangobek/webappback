@@ -588,3 +588,25 @@ def get_user_profile_info(request):
         'rank': user_rank,
         'participate_days': participate_days,
     })
+
+
+class ScheduledTasksAPIView(APIView):
+    def get(self, request):
+        response_data = []
+
+        tasks = ChallengeTask.objects.all()
+
+        for task in tasks:
+            user_selections = UserTaskSelection.objects.filter(task=task).select_related("user")
+            users = [{"telegram_id": user.user.telegram_id} for user in user_selections]
+            
+            if users:
+                response_data.append({
+                    "task_id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "time_start": str(task.time_start),
+                    "users": users
+                })
+
+        return Response(response_data)

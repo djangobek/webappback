@@ -26,4 +26,6 @@ urlpatterns = [
     path("user-progress/", get_user_challenge_progress, name="user-progress"),
     path('today-task-status/', get_today_tasks_status, name='today-task-status'),
     path('calendar/', get_task_logs_by_user, name='calendar'),
+    path("scheduled-tasks/", ScheduledTasksAPIView.as_view()),
+
 ]
