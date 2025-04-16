@@ -12,6 +12,9 @@ from django.http import JsonResponse
 from datetime import timedelta
 from rest_framework.decorators import api_view
 from rest_framework import status as http_status
+from django.db import transaction
+
+
 
 class BotUserViewset(ModelViewSet):
     queryset = BotUserModel.objects.all()
@@ -610,3 +613,69 @@ class ScheduledTasksAPIView(APIView):
                 })
 
         return Response(response_data)
+    
+
+
+
+@api_view(['GET'])
+def get_user_task_selection_status(request):
+    telegram_id = request.query_params.get('telegram_id')
+    if not telegram_id:
+        return Response({'error': 'telegram_id is required'}, status=400)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=404)
+
+    all_tasks = ChallengeTask.objects.all()
+    selected_ids = set(user.selected_tasks.values_list('task_id', flat=True))
+
+    selected = []
+    unselected = []
+
+    for task in all_tasks:
+        task_data = {
+            'id': task.id,
+            'title': task.title,
+            'description': task.description,
+            'time_start': task.time_start,
+            'time_end': task.time_end,
+            'point': task.point
+        }
+
+        if task.id in selected_ids:
+            selected.append(task_data)
+        else:
+            unselected.append(task_data)
+
+    return Response({'selected': selected, 'unselected': unselected})
+
+
+
+@api_view(['POST'])
+@transaction.atomic
+def update_user_task_selection(request):
+    telegram_id = request.data.get('telegram_id')
+    task_ids = request.data.get('task_ids')  # list of task IDs
+
+    if not telegram_id or not isinstance(task_ids, list):
+        return Response({'error': 'telegram_id and task_ids (list) are required'}, status=400)
+
+    try:
+        user = BotUserModel.objects.get(telegram_id=telegram_id)
+    except BotUserModel.DoesNotExist:
+        return Response({'error': 'User not found'}, status=404)
+
+    # Remove old selections
+    UserTaskSelection.objects.filter(user=user).delete()
+
+    # Create new selections
+    for task_id in task_ids:
+        try:
+            task = ChallengeTask.objects.get(id=task_id)
+            UserTaskSelection.objects.create(user=user, task=task)
+        except ChallengeTask.DoesNotExist:
+            continue  # skip invalid task_id
+
+    return Response({'message': 'Selection updated successfully'})

@@ -27,5 +27,8 @@ urlpatterns = [
     path('today-task-status/', get_today_tasks_status, name='today-task-status'),
     path('calendar/', get_task_logs_by_user, name='calendar'),
     path("scheduled-tasks/", ScheduledTasksAPIView.as_view()),
+    path('user-task-selection/', get_user_task_selection_status, name='get_user_task_selection'),
+    path('user-task-selection/update/', update_user_task_selection, name='update_user_task_selection'),
 
 ]
+
