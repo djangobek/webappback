@@ -667,11 +667,18 @@ def update_user_task_selection(request):
     except BotUserModel.DoesNotExist:
         return Response({'error': 'User not found'}, status=404)
 
-    # Remove old selections
-    UserTaskSelection.objects.filter(user=user).delete()
+    current_task_ids = set(
+        UserTaskSelection.objects.filter(user=user).values_list('task_id', flat=True)
+    )
+    incoming_task_ids = set(task_ids)
 
-    # Create new selections
-    for task_id in task_ids:
+    # ✅ Tasks to remove
+    task_ids_to_delete = current_task_ids - incoming_task_ids
+    UserTaskSelection.objects.filter(user=user, task_id__in=task_ids_to_delete).delete()
+
+    # ✅ Tasks to add (new ones)
+    task_ids_to_add = incoming_task_ids - current_task_ids
+    for task_id in task_ids_to_add:
         try:
             task = ChallengeTask.objects.get(id=task_id)
             UserTaskSelection.objects.create(user=user, task=task)
